@@ -1,0 +1,148 @@
+<!doctype html>
+
+<html lang="id">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>File Uploader — OmegaTech API</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,Segoe UI,Roboto,'Helvetica Neue',Arial}
+    body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#f4f6f8;margin:0}
+    .card{width:520px;background:white;border-radius:12px;padding:20px;box-shadow:0 6px 24px rgba(14,20,30,0.08)}
+    h1{font-size:18px;margin:0 0 12px}
+    label{display:block;margin:8px 0;font-size:13px;color:#333}
+    input[type=file]{display:block}
+    .row{display:flex;gap:8px;align-items:center}
+    .btn{padding:10px 14px;border-radius:8px;border:0;background:#0b69ff;color:white;cursor:pointer}
+    .btn[disabled]{opacity:.6;cursor:not-allowed}
+    .progress{height:10px;background:#e6eefb;border-radius:8px;overflow:hidden;margin-top:10px}
+    .bar{height:100%;width:0%;background:#0b69ff}
+    pre{background:#0f1720;color:#e6eefb;padding:10px;border-radius:8px;overflow:auto;font-size:12px}
+    .hint{font-size:12px;color:#666;margin-top:8px}
+    .drop{border:2px dashed #dbe7ff;padding:14px;border-radius:10px;text-align:center;color:#475569;cursor:pointer}
+    input[type=text]{width:100%;padding:8px;border-radius:8px;border:1px solid #d0d7e6}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>File Uploader — menggunakan OmegaTech API</h1><label for="apiKey">API Key (opsional — jika API butuh Authorization Bearer)</label>
+<input id="apiKey" type="text" placeholder="Masukkan API key (boleh dikosongkan)" />
+
+<label class="hint">Pilih file atau seret ke kotak di bawah</label>
+<div id="drop" class="drop">Tarik & letakkan file di sini, atau klik untuk pilih</div>
+<input id="fileInput" type="file" style="display:none" />
+
+<div style="margin-top:12px; display:flex; gap:8px;">
+  <button id="uploadBtn" class="btn">Upload</button>
+  <button id="clearBtn" class="btn" style="background:#6b7280">Bersihkan</button>
+</div>
+
+<div class="progress" aria-hidden="true" style="margin-top:12px"><div id="bar" class="bar"></div></div>
+<div id="status" class="hint"></div>
+
+<h2 style="font-size:14px;margin-top:12px">Response</h2>
+<pre id="result">Belum ada hasil.</pre>
+
+<p class="hint">Catatan: endpoint yang digunakan: <code>https://omegatech-api.dixonomega.tech/api/tools/upload</code></p>
+<p class="hint">Field file yang dikirim: <code>file</code> (FormData). Jika server menolak karena CORS, Anda perlu men-deploy server kecil atau minta pemilik API mengizinkan origin Anda.</p>
+
+  </div>  <script>
+    const ENDPOINT = 'https://omegatech-api.dixonomega.tech/api/tools/upload';
+    const fileInput = document.getElementById('fileInput');
+    const drop = document.getElementById('drop');
+    const uploadBtn = document.getElementById('uploadBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const bar = document.getElementById('bar');
+    const result = document.getElementById('result');
+    const status = document.getElementById('status');
+    const apiKeyInput = document.getElementById('apiKey');
+
+    let currentFile = null;
+
+    // Drop & click
+    drop.addEventListener('click', () => fileInput.click());
+
+    drop.addEventListener('dragover', (e) => { e.preventDefault(); drop.style.background = '#eef6ff'; });
+    drop.addEventListener('dragleave', (e) => { e.preventDefault(); drop.style.background = ''; });
+    drop.addEventListener('drop', (e) => {
+      e.preventDefault(); drop.style.background = '';
+      const f = e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) setFile(f);
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f) setFile(f);
+    });
+
+    function setFile(f){
+      currentFile = f;
+      drop.textContent = `Dipilih: ${f.name} — ${formatBytes(f.size)}`;
+      result.textContent = 'Belum ada hasil.';
+      bar.style.width = '0%';
+      status.textContent = '';
+    }
+
+    uploadBtn.addEventListener('click', () => {
+      if (!currentFile) return alert('Pilih file terlebih dahulu.');
+      uploadFile(currentFile);
+    });
+
+    clearBtn.addEventListener('click', () => {
+      currentFile = null; fileInput.value = ''; drop.textContent = 'Tarik & letakkan file di sini, atau klik untuk pilih'; bar.style.width = '0%'; result.textContent = 'Belum ada hasil.'; status.textContent = '';
+    });
+
+    function uploadFile(file){
+      const xhr = new XMLHttpRequest();
+      const fd = new FormData();
+      // field name: "file" (asumsi umum). Jika API butuh nama lain, ubah di sini.
+      fd.append('file', file, file.name);
+
+      xhr.open('POST', ENDPOINT, true);
+
+      // Jika API memerlukan header Authorization Bearer, isi pada input API Key
+      const apiKey = apiKeyInput.value.trim();
+      if (apiKey) xhr.setRequestHeader('Authorization', 'Bearer ' + apiKey);
+
+      // Optional: setAccept header
+      xhr.setRequestHeader('Accept', 'application/json');
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const pct = Math.round((e.loaded / e.total) * 100);
+          bar.style.width = pct + '%';
+          status.textContent = `Uploading: ${pct}%`;
+        }
+      };
+
+      xhr.onreadystatechange = () => {
+        if (xhr.readyState === 4) {
+          bar.style.width = '100%';
+          if (xhr.status >= 200 && xhr.status < 300) {
+            // Try parse JSON
+            try { const json = JSON.parse(xhr.responseText); result.textContent = JSON.stringify(json, null, 2); status.textContent = 'Selesai (success)'; }
+            catch (err) { result.textContent = xhr.responseText; status.textContent = 'Selesai (non-JSON)'; }
+          } else {
+            result.textContent = `Error ${xhr.status}: ` + xhr.responseText;
+            status.textContent = 'Upload gagal';
+          }
+        }
+      };
+
+      // Error handling
+      xhr.onerror = () => { status.textContent = 'Terjadi kesalahan jaringan saat upload'; };
+
+      // Send
+      xhr.send(fd);
+      status.textContent = 'Memulai upload...';
+    }
+
+    function formatBytes(bytes){
+      if (bytes === 0) return '0 B';
+      const k = 1024;
+      const sizes = ['B','KB','MB','GB','TB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+  </script></body>
+  </html>
